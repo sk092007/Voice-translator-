@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>🌍 AI Voice Translator</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  background-size: 400% 400%;
+  animation: bgMove 15s ease infinite;
+  font-family: 'Poppins', sans-serif;
+  color: #fff;
+}
+@keyframes bgMove {
+  0% {background-position: 0% 50%;}
+  50% {background-position: 100% 50%;}
+  100% {background-position: 0% 50%;}
+}
+.container {
+  width: 90%;
+  max-width: 600px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  backdrop-filter: blur(12px);
+  padding: 25px;
+  text-align: center;
+}
+h2 {margin-bottom: 15px;}
+.langs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+select {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+#mic {
+  width: 90px; height: 90px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #00e1ff, #0072ff);
+  display: flex; align-items: center; justify-content: center;
+  margin: 10px auto;
+  font-size: 36px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+#mic.listening {
+  box-shadow: 0 0 40px rgba(0,255,255,0.8);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%,100% {transform: scale(1);}
+  50% {transform: scale(1.1);}
+}
+#status {font-size: 14px; opacity: 0.8;}
+#box {
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 10px;
+  text-align: left;
+  font-size: 15px;
+}
+strong {color: #00e1ff;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>🎧 AI Voice Translator</h2>
+  <div class="langs">
+    <label>From:
+      <select id="fromLang">
+        <option value="auto" selected>Auto Detect</option>
+        <option value="en">English</option>
+        <option value="hi">Hindi</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="ru">Russian</option>
+        <option value="ar">Arabic</option>
+        <option value="ja">Japanese</option>
+        <option value="zh">Chinese</option>
+      </select>
+    </label>
+    <label>To:
+      <select id="toLang">
+        <option value="en">English</option>
+        <option value="hi" selected>Hindi</option>
+        <option value="es">Spanish</option>
+        <option value="fr">French</option>
+        <option value="de">German</option>
+        <option value="ru">Russian</option>
+        <option value="ar">Arabic</option>
+        <option value="ja">Japanese</option>
+        <option value="zh">Chinese</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="mic">🎙️</div>
+  <div id="status">Tap to start speaking</div>
+
+  <div id="box">
+    <div><strong>Heard:</strong> <span id="heard">—</span></div>
+    <div><strong>Translated:</strong> <span id="translated">—</span></div>
+  </div>
+</div>
+
+<script>
+const mic = document.getElementById("mic");
+const statusEl = document.getElementById("status");
+const heardEl = document.getElementById("heard");
+const translatedEl = document.getElementById("translated");
+const fromLang = document.getElementById("fromLang");
+const toLang = document.getElementById("toLang");
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+
+// ✅ Translation function using MyMemory (works with CORS)
+async function translateText(text, src, tgt) {
+  try {
+    const pair = src === "auto" ? `en|${tgt}` : `${src}|${tgt}`;
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${pair}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data?.responseData?.translatedText) {
+      return data.responseData.translatedText;
+    }
+  } catch (err) {
+    console.error("Translation error:", err);
+  }
+  return text; // fallback
+}
+
+// 🗣️ Speak output
+function speak(text, lang) {
+  if (!text) return;
+  const utter = new SpeechSynthesisUtterance(text);
+  const voices = speechSynthesis.getVoices();
+  const match = voices.find(v => v.lang.toLowerCase().startsWith(lang)) || voices.find(v => v.lang.startsWith("en"));
+  utter.voice = match;
+  utter.lang = match?.lang || "en-US";
+  utter.rate = 1.0;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+}
+
+// 🎙️ Start/Stop Recognition
+mic.onclick = () => {
+  if (recognition) {
+    recognition.stop();
+    recognition = null;
+    mic.classList.remove("listening");
+    statusEl.textContent = "Stopped";
+  } else startListening();
+};
+
+function startListening() {
+  if (!SpeechRecognition) return alert("SpeechRecognition not supported on this browser!");
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  if (fromLang.value !== "auto") recognition.lang = fromLang.value;
+
+  mic.classList.add("listening");
+  statusEl.textContent = "Listening...";
+  recognition.start();
+
+  recognition.onresult = async (e) => {
+    let transcript = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript + " ";
+    }
+    transcript = transcript.trim();
+    heardEl.textContent = transcript;
+
+    if (e.results[e.resultIndex].isFinal) {
+      translatedEl.textContent = "Translating...";
+      const translated = await translateText(transcript, fromLang.value, toLang.value);
+      translatedEl.textContent = translated;
+      speak(translated, toLang.value);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    statusEl.textContent = "Error: " + e.error;
+    mic.classList.remove("listening");
+  };
+
+  recognition.onend = () => {
+    mic.classList.remove("listening");
+    statusEl.textContent = "Tap to start again";
+  };
+}
+</script>
+</body>
+</html>
